@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset='utf-8'>
+    <meta http-equiv='X-UA-Compatible' content='IE=edge'>
+    <title>Page Title</title>
+    <meta name='viewport' content='width=device-width, initial-scale=1'>
+</head>
+
+<body>
+    <p id="likes">Debug Likes</p>
+    <p id="lurks">Debug Lurks</p>
+    <script>
+        let likes = document.querySelector("#likes")
+        let lurks = document.querySelector("#lurks")
+        setInterval(() => {
+            fetch("http://localhost:35395/data").then((v) => {
+                v.json().then((val) => {
+                    try {
+                        likes.innerHTML = `Likes: ${val.like_count}`
+                        lurks.innerHTML = `Lurkes: ${val.lurk_count}`
+                    } catch (error) {
+
+                    }
+
+                })
+            })
+        }, 1000)
+    </script>
+    <style>
+        body {
+            color: white;
+            background-color: transparent;
+            font-size: 6em;
+            font-weight: bold;
+        }
+    </style>
+</body>
+
+</html>
