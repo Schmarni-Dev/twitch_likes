@@ -8,7 +8,13 @@
 
     http://localhost:35395/
 
-    if you dont want the lurks counter just add this to your obs browser source:
+    commands are:
+    !like
+    !dislike
+    !refundlike
+    !lurk
+
+    if you dont want the lurks counter just add this in the custom css field to your obs browser source:
 
     #lurks { display: none; }
 
