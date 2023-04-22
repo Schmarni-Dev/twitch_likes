@@ -8,6 +8,7 @@ use axum::response::Html;
 use axum::routing::get;
 use axum::{Json, Router};
 use twitch_irc::login::StaticLoginCredentials;
+use twitch_irc::message::{PrivmsgMessage, ServerMessage};
 use twitch_irc::TwitchIRCClient;
 use twitch_irc::{ClientConfig, SecureTCPTransport};
 
@@ -30,13 +31,6 @@ fn read_string(f: &mut File) -> String {
     let mut out = String::new();
     let _ = f.read_to_string(&mut out);
     out
-}
-
-fn is_user_name(name: Option<&String>) -> bool {
-    match name {
-        None => false,
-        Some(n) => n.starts_with("#"),
-    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -72,65 +66,73 @@ pub async fn main() {
     // otherwise they will back up.
     let state = app_state.clone();
     let _ = tokio::spawn(async move {
-        while let Some(message) = incoming_messages.recv().await {
-            let name = message.source().params.iter().nth(0);
-            let msg = message.source().params.iter().nth(1);
-            if !is_user_name(name) || msg.is_none() {
-                continue;
-            }
-            let name = name.unwrap().strip_prefix("#").unwrap().to_owned();
-            let msg = msg.unwrap().to_owned();
-            let action = match msg.as_str() {
-                "!like" => UserAction::Like,
-                "!dislike" => UserAction::Dislike,
-                "!lurk" => UserAction::Lurk,
-                "!refundlike" => UserAction::RefundLike,
-                _ => UserAction::None,
-            };
-            // let mut user_data = state;
-            match action {
-                UserAction::Lurk => {
-                    let mut local_state = state.lock().unwrap();
-                    let user = local_state.user_data.entry(name.clone()).or_default();
-                    if !user.contains(&UserState::HasLurked) {
-                        user.push(UserState::HasLurked);
-                    }
-                }
-                UserAction::Like => {
-                    let mut local_state = state.lock().unwrap();
-                    let user = local_state.user_data.entry(name.clone()).or_default();
-                    if user.contains(&UserState::Like) {
-                        continue;
+        while let Some(mess) = incoming_messages.recv().await {
+            match mess {
+                ServerMessage::Privmsg(message) => {
+                    let id = message.sender.id.to_owned();
+                    let msg = message.message_text;
+                    println!("MSG: {}: {}", id, msg);
+                    let action = match msg.as_str() {
+                        "!like" => UserAction::Like,
+                        "!dislike" => UserAction::Dislike,
+                        "!lurk" => UserAction::Lurk,
+                        "!refundlike" => UserAction::RefundLike,
+                        _ => UserAction::None,
                     };
-                    if user.contains(&UserState::Dislike) {
-                        user.remove(user.iter().position(|x| x == &UserState::Dislike).unwrap());
+                    // let mut user_data = state;
+                    match action {
+                        UserAction::Lurk => {
+                            let mut local_state = state.lock().unwrap();
+                            let user = local_state.user_data.entry(id.clone()).or_default();
+                            if !user.contains(&UserState::HasLurked) {
+                                user.push(UserState::HasLurked);
+                            }
+                        }
+                        UserAction::Like => {
+                            let mut local_state = state.lock().unwrap();
+                            let user = local_state.user_data.entry(id.clone()).or_default();
+                            if user.contains(&UserState::Like) {
+                                continue;
+                            };
+                            if user.contains(&UserState::Dislike) {
+                                user.remove(
+                                    user.iter().position(|x| x == &UserState::Dislike).unwrap(),
+                                );
+                            }
+                            user.push(UserState::Like);
+                        }
+                        UserAction::Dislike => {
+                            let mut local_state = state.lock().unwrap();
+                            let user = local_state.user_data.entry(id.clone()).or_default();
+                            if user.contains(&UserState::Dislike) {
+                                continue;
+                            };
+                            if user.contains(&UserState::Like) {
+                                user.remove(
+                                    user.iter().position(|x| x == &UserState::Like).unwrap(),
+                                );
+                            }
+                            user.push(UserState::Dislike)
+                        }
+                        UserAction::RefundLike => {
+                            let mut local_state = state.lock().unwrap();
+                            let user = local_state.user_data.entry(id.clone()).or_default();
+                            if user.contains(&UserState::Like) {
+                                user.remove(
+                                    user.iter().position(|x| x == &UserState::Like).unwrap(),
+                                );
+                            }
+                            if user.contains(&UserState::Dislike) {
+                                user.remove(
+                                    user.iter().position(|x| x == &UserState::Dislike).unwrap(),
+                                );
+                            }
+                        }
+                        UserAction::None => (),
                     }
-                    user.push(UserState::Like);
                 }
-                UserAction::Dislike => {
-                    let mut local_state = state.lock().unwrap();
-                    let user = local_state.user_data.entry(name.clone()).or_default();
-                    if user.contains(&UserState::Dislike) {
-                        continue;
-                    };
-                    if user.contains(&UserState::Like) {
-                        user.remove(user.iter().position(|x| x == &UserState::Like).unwrap());
-                    }
-                    user.push(UserState::Dislike)
-                }
-                UserAction::RefundLike => {
-                    let mut local_state = state.lock().unwrap();
-                    let user = local_state.user_data.entry(name.clone()).or_default();
-                    if user.contains(&UserState::Like) {
-                        user.remove(user.iter().position(|x| x == &UserState::Like).unwrap());
-                    }
-                    if user.contains(&UserState::Dislike) {
-                        user.remove(user.iter().position(|x| x == &UserState::Dislike).unwrap());
-                    }
-                }
-                UserAction::None => (),
+                msg => (),
             }
-            // println!("Received message: {}: {}", name, msg);
         }
     });
 
