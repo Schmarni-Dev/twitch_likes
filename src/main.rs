@@ -8,7 +8,7 @@ use axum::response::Html;
 use axum::routing::get;
 use axum::{Json, Router};
 use twitch_irc::login::StaticLoginCredentials;
-use twitch_irc::message::{PrivmsgMessage, ServerMessage};
+use twitch_irc::message::ServerMessage;
 use twitch_irc::TwitchIRCClient;
 use twitch_irc::{ClientConfig, SecureTCPTransport};
 
@@ -131,7 +131,7 @@ pub async fn main() {
                         UserAction::None => (),
                     }
                 }
-                msg => (),
+                _ => (),
             }
         }
     });
